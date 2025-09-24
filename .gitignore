@@ -35,3 +35,4 @@ build/
 # Sensitive configuration files
 .application.properties
 env.properties
+env.properties.example
