@@ -22,14 +22,10 @@ public class DeepgramClient {
 		this.webClient = builder.build();
 	}
 
-	public TranscriptResult transcribe(MultipartFile audio) {
-		if (properties.getDeepgram().getApiKey() == null || properties.getDeepgram().getApiKey().isBlank()) {
-			TranscriptResult fallback = new TranscriptResult();
-			fallback.language = "en";
-			fallback.rawText = "[Mock transcript because DEEPGRAM API KEY is not set]";
-			fallback.utterances = new ArrayList<>();
-			return fallback;
-		}
+    public TranscriptResult transcribe(MultipartFile audio) {
+        if (properties.getDeepgram().getApiKey() == null || properties.getDeepgram().getApiKey().isBlank()) {
+            throw new IllegalStateException("Deepgram API key not configured. Set api.deepgram.apiKey");
+        }
 		String url = properties.getDeepgram().getUrl()
 				+ "?smart_format=true&punctuate=true&diarize=true&utterances=true";
 		return webClient.post()
@@ -37,7 +33,11 @@ public class DeepgramClient {
 				.header("Authorization", "Token " + properties.getDeepgram().getApiKey())
 				.contentType(MediaType.APPLICATION_OCTET_STREAM)
 				.body(BodyInserters.fromValue(getBytes(audio)))
-				.retrieve()
+                .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        resp -> resp.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .map(body -> new RuntimeException("Deepgram API error " + resp.statusCode() + ": " + body)))
 				.bodyToMono(Map.class)
 				.map(this::mapDeepgram)
 				.block();

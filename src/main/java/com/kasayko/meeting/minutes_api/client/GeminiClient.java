@@ -20,13 +20,10 @@ public class GeminiClient {
 		this.webClient = builder.build();
 	}
 
-	public SummaryResult summarize(String transcriptText, String targetLanguage) {
-		if (properties.getGemini().getApiKey() == null || properties.getGemini().getApiKey().isBlank() || properties.getGemini().getUrl() == null) {
-			SummaryResult s = new SummaryResult();
-			s.summary = "[Mock summary because GEMINI API KEY/URL not set]";
-			s.actionItems = List.of("[Mock action 1]", "[Mock action 2]");
-			return s;
-		}
+    public SummaryResult summarize(String transcriptText, String targetLanguage) {
+        if (properties.getGemini().getApiKey() == null || properties.getGemini().getApiKey().isBlank() || properties.getGemini().getUrl() == null) {
+            throw new IllegalStateException("Gemini API key/url not configured. Set api.gemini.apiKey and api.gemini.url");
+        }
 		String lang = (targetLanguage == null || targetLanguage.isBlank()) ? "en" : targetLanguage;
 		Map<String, Object> payload = Map.of(
 				"contents", List.of(Map.of(
@@ -34,12 +31,16 @@ public class GeminiClient {
 					"parts", List.of(Map.of("text", "You are a helpful assistant. Summarize this meeting in language '" + lang + "' and extract clear bullet-point action items (start bullets with '-' or '*'). Keep it concise. Transcript:\n\n" + transcriptText))
 				))
 		);
-		return webClient.post()
+        return webClient.post()
 				.uri(properties.getGemini().getUrl() + "?key=" + properties.getGemini().getApiKey())
 				.contentType(MediaType.APPLICATION_JSON)
 				.body(BodyInserters.fromValue(payload))
-				.retrieve()
-				.bodyToMono(Map.class)
+                .retrieve()
+                .onStatus(status -> status.is4xxClientError() || status.is5xxServerError(),
+                        resp -> resp.bodyToMono(String.class)
+                                .defaultIfEmpty("")
+                                .map(body -> new RuntimeException("Gemini API error " + resp.statusCode() + ": " + body)))
+                .bodyToMono(Map.class)
 				.map(this::mapGemini)
 				.block();
 	}
