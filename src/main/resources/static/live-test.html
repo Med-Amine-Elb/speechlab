@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Recording Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .start-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .start-btn:hover {
+            background-color: #45a049;
+        }
+        .stop-btn {
+            background-color: #f44336;
+            color: white;
+        }
+        .stop-btn:hover {
+            background-color: #da190b;
+        }
+        .stop-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.recording {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        .status.stopped {
+            background-color: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        .transcript {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            min-height: 100px;
+            white-space: pre-wrap;
+        }
+        .summary {
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            min-height: 50px;
+            white-space: pre-wrap;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .auth-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Live Recording Test</h1>
+        
+        <div class="auth-section">
+            <h3>Authentication</h3>
+            <input type="text" id="email" placeholder="Email" value="user123@example.com">
+            <input type="password" id="password" placeholder="Password" value="secret123">
+            <button onclick="login()">Login</button>
+            <span id="authStatus"></span>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" class="start-btn" onclick="startRecording()">🎤 Start Recording</button>
+            <button id="stopBtn" class="stop-btn" onclick="stopRecording()" disabled>⏹️ Stop Recording</button>
+            <button onclick="testWithFile()" style="background-color: #2196F3; color: white; margin-left: 10px;">📁 Test with File</button>
+            <button onclick="testDeepgramDirectly()" style="background-color: #FF9800; color: white; margin-left: 10px;">🔧 Test Deepgram</button>
+        </div>
+        
+        <div id="status" class="status stopped">Ready to record</div>
+        
+        <div class="transcript">
+            <h3>📝 Live Transcript:</h3>
+            <div id="transcriptContent">No transcript yet...</div>
+        </div>
+        
+        <div class="summary">
+            <h3>📋 Summary:</h3>
+            <div id="summaryContent">No summary yet...</div>
+        </div>
+        
+        <div id="errorContainer"></div>
+    </div>
+
+    <script>
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let token = null;
+        let sessionId = null;
+        let intervalId = null;
+        let mimeType = 'audio/webm;codecs=opus'; // Default mime type
+
+        // Authentication
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                if (data.token) {
+                    token = data.token;
+                    document.getElementById('authStatus').textContent = '✅ Logged in successfully';
+                    document.getElementById('authStatus').style.color = 'green';
+                } else {
+                    document.getElementById('authStatus').textContent = '❌ Login failed: ' + (data.error || 'Unknown error');
+                    document.getElementById('authStatus').style.color = 'red';
+                }
+            } catch (error) {
+                document.getElementById('authStatus').textContent = '❌ Login error: ' + error.message;
+                document.getElementById('authStatus').style.color = 'red';
+            }
+        }
+
+        // Start recording
+        async function startRecording() {
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+
+            try {
+                // Start the session
+                const startResponse = await fetch('/api/live/start', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                
+                const startData = await startResponse.json();
+                if (startData.status === 'started') {
+                    sessionId = startData.sessionId;
+                    showStatus('🎤 Recording started...', 'recording');
+                } else {
+                    showError('Failed to start session: ' + startData.message);
+                    return;
+                }
+
+                // Get microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    } 
+                });
+                
+                // Try different audio formats for better Deepgram compatibility
+                let mimeType = 'audio/webm;codecs=opus';
+                if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    mimeType = 'audio/mp4';
+                } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
+                    mimeType = 'audio/mpeg';
+                } else if (MediaRecorder.isTypeSupported('audio/wav')) {
+                    mimeType = 'audio/wav';
+                }
+                
+                console.log('Selected mimeType:', mimeType);
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType
+                });
+                
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = function(event) {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = function() {
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                // Start recording with small time slices
+                mediaRecorder.start(1000); // 1 second chunks for better quality
+                isRecording = true;
+                
+                // Don't send chunks automatically - wait for stop recording
+                console.log('Recording started - audio will be processed when you stop recording');
+                
+                updateUI();
+                
+            } catch (error) {
+                showError('Failed to start recording: ' + error.message);
+            }
+        }
+
+
+        // Stop recording
+        async function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                showStatus('🔄 Processing audio...', 'recording');
+                
+                // Process all accumulated audio at once
+                try {
+                    console.log('Processing complete audio recording...');
+                    console.log('Total audio chunks:', audioChunks.length);
+                    
+                    // Create a single blob from all chunks
+                    const completeAudioBlob = new Blob(audioChunks, { type: mimeType });
+                    console.log('Complete audio blob size:', completeAudioBlob.size, 'bytes, type:', mimeType);
+                    
+                    if (completeAudioBlob.size < 1000) {
+                        showError('❌ Audio too short - please record for at least 2-3 seconds');
+                        showStatus('⏹️ Recording stopped', 'stopped');
+                        updateUI();
+                        return;
+                    }
+                    
+                    // Send complete audio to /api/audio endpoint
+                    const formData = new FormData();
+                    const fileExtension = mimeType.includes('webm') ? 'webm' : 
+                                         mimeType.includes('wav') ? 'wav' : 
+                                         mimeType.includes('mp4') ? 'mp4' : 'webm';
+                    formData.append('file', completeAudioBlob, 'recording.' + fileExtension);
+                    
+                    console.log('Sending complete audio to Deepgram...');
+                    const response = await fetch('/api/audio', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    console.log('Complete audio processing response:', data);
+                    
+                    if (data.transcript && data.transcript.rawText) {
+                        document.getElementById('transcriptContent').textContent = data.transcript.rawText;
+                        console.log('✅ Transcription successful!');
+                    } else {
+                        console.log('❌ No transcript received');
+                    }
+                    
+                    if (data.summary && data.summary.summary) {
+                        document.getElementById('summaryContent').textContent = data.summary.summary;
+                        console.log('✅ Summary generated!');
+                    } else {
+                        console.log('❌ No summary received');
+                    }
+                    
+                } catch (error) {
+                    console.error('Error processing complete audio:', error);
+                    showError('Failed to process audio: ' + error.message);
+                }
+                
+                // Clear audio chunks
+                audioChunks = [];
+                
+                showStatus('⏹️ Recording stopped', 'stopped');
+                updateUI();
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            
+            if (isRecording) {
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+
+        // Show status
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+        }
+
+        // Show error
+        function showError(message) {
+            const errorContainer = document.getElementById('errorContainer');
+            errorContainer.innerHTML = '<div class="error">❌ ' + message + '</div>';
+        }
+
+        // Test with file upload
+        function testWithFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'audio/*';
+            input.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    // Start session
+                    const startResponse = await fetch('/api/live/start', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    const startData = await startResponse.json();
+                    console.log('Session started:', startData);
+                    
+                    // Upload file
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await fetch('/api/live/upload-chunk', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    console.log('File upload response:', data);
+                    
+                    if (data.transcript) {
+                        document.getElementById('transcriptContent').textContent = data.transcript;
+                    }
+                    if (data.summary) {
+                        document.getElementById('summaryContent').textContent = data.summary;
+                    }
+                    
+                    // Stop session
+                    const stopResponse = await fetch('/api/live/stop', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    const stopData = await stopResponse.json();
+                    console.log('Session stopped:', stopData);
+                    
+                } catch (error) {
+                    console.error('File test error:', error);
+                    showError('File test failed: ' + error.message);
+                }
+            };
+            input.click();
+        }
+
+        // Test Deepgram directly
+        function testDeepgramDirectly() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'audio/*';
+            input.onchange = async function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                try {
+                    console.log('Testing Deepgram directly with file:', file.name, file.type, file.size);
+                    
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const response = await fetch('/api/audio', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    console.log('Direct Deepgram test response:', data);
+                    
+                    if (data.transcript && data.transcript.rawText) {
+                        document.getElementById('transcriptContent').textContent = data.transcript.rawText;
+                        showStatus('✅ Deepgram test successful!', 'stopped');
+                    } else {
+                        showError('❌ Deepgram test failed: ' + JSON.stringify(data));
+                    }
+                    
+                } catch (error) {
+                    console.error('Direct Deepgram test error:', error);
+                    showError('Direct Deepgram test failed: ' + error.message);
+                }
+            };
+            input.click();
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateUI();
+        });
+    </script>
+</body>
+</html>

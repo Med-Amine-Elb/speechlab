@@ -23,7 +23,7 @@ public class SecurityConfig {
 		http.csrf(csrf -> csrf.disable());
 		http.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 		http.authorizeHttpRequests(auth -> auth
-				.requestMatchers("/api/auth/**", "/actuator/**").permitAll()
+				.requestMatchers("/api/auth/**", "/actuator/**", "/ws/**", "/live-test.html", "/static/**").permitAll()
 				.anyRequest().authenticated());
 		http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();

@@ -27,7 +27,7 @@ public class DeepgramClient {
             throw new IllegalStateException("Deepgram API key not configured. Set api.deepgram.apiKey");
         }
 		String url = properties.getDeepgram().getUrl()
-				+ "?smart_format=true&punctuate=true&diarize=true&utterances=true";
+				+ "?smart_format=true&punctuate=true&diarize=true&utterances=true&model=nova-2&language=en&encoding=linear16&sample_rate=16000&channels=1";
 		return webClient.post()
 				.uri(url)
 				.header("Authorization", "Token " + properties.getDeepgram().getApiKey())

@@ -218,6 +218,120 @@
           ]
         }
       }
+    },
+    {
+      "name": "Live Recording - Start",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/live/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "live",
+            "start"
+          ]
+        },
+        "description": "Start a live recording session. Returns a session ID for tracking."
+      }
+    },
+    {
+      "name": "Live Recording - Send Audio Chunk (JSON)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"audioData\": \"base64_encoded_audio_data_here\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/live/chunk",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "live",
+            "chunk"
+          ]
+        },
+        "description": "Send base64 encoded audio data for processing. Replace 'base64_encoded_audio_data_here' with actual base64 audio data."
+      }
+    },
+    {
+      "name": "Live Recording - Send Audio Chunk (File)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/live/upload-chunk",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "live",
+            "upload-chunk"
+          ]
+        },
+        "description": "Upload audio file directly for processing. Easier than base64 encoding."
+      }
+    },
+    {
+      "name": "Live Recording - Stop",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/live/stop",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "live",
+            "stop"
+          ]
+        },
+        "description": "Stop the recording session and get final transcript and summary."
+      }
     }
   ],
   "variable": [
